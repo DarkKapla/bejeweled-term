@@ -16,8 +16,8 @@ static NCURSES_FLAG: AtomicBool = AtomicBool::new(false);
 /// It used to be named Tui, for terminal user interface, in my previous
 /// attempt. I kind of miss that special name, but it'd be confusing.
 ///
-/// NCurses is unsafe and the terminal it controls is a global state. So any function that deals
-/// ncruses requires a &mut Term argument so that Rust's borrow checker will prevent a concurrent
+/// NCurses is unsafe and the terminal it controls is a global state. So any function that deals with
+/// ncurses requires a &mut Term argument so that Rust's borrow checker will prevent a concurrent
 /// call on any function that deals with ncurses.
 #[derive(Debug)]
 pub struct Term {

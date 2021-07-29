@@ -29,7 +29,7 @@ pub fn main(conf: &Config) -> Result<(), &str> {
 	let mut grid = crate::grid::Grid::new_rand(conf.height, conf.width);
 	let mut term = crate::term::Term::new()?;
 
-	// TODO refractor this. It's a bal of mud.
+	// TODO refractor this. It's a ball of mud.
 
 	// clean the grid of any match
 	for i in 0..64 {
@@ -113,7 +113,7 @@ pub fn main(conf: &Config) -> Result<(), &str> {
 										.sum();
 				// print the score. Plz rework on that later.
 				unsafe {
-					let s = format!("Score of {}, great!", score);
+					let s = format!("Score of {}.", score);
 					let bytes = s.as_bytes();
 					let l = usize::min(bytes.len(), REMOVE_ME.len());
 					let dest = &mut REMOVE_ME[..l];
