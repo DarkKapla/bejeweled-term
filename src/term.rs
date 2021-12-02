@@ -4,13 +4,13 @@
 
 use crate::grid;
 
-extern crate ncurses;
 use ncurses::*;
 
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-static NCURSES_FLAG: AtomicBool = AtomicBool::new(false);
+static NCURSES_FLAG: AtomicBool = AtomicBool::new(false); // true if NCurses is active
+static NCURSES_LOCK: AtomicBool = AtomicBool::new(false); // lock for NCurses' critical section
 
 /// Terminal handler/wrapper, the piece of data that controls the terminal. Graphics and user input.
 /// It used to be named Tui, for terminal user interface, in my previous
@@ -34,14 +34,21 @@ pub struct Term {
 impl Term {
 	pub fn new() -> Result<Term, &'static str> {
 
+		// Spin on the lock to handle NCurses, as long as "true" was stored,
+		while NCURSES_LOCK.swap(true, Ordering::SeqCst) == true {}
 		// Test and set
-		let f = NCURSES_FLAG.swap(true, Ordering::Acquire);
+		let f = NCURSES_FLAG.swap(true, Ordering::SeqCst);
 		if f == true {
+			NCURSES_LOCK.store(false, Ordering::SeqCst);
 			return Err("NCurses was already initialized by another Tui.");
 		}
 
 		let r = init_ncurses();
-		if r.is_err() {return Err("NCurses could not be initialized correctly.");}
+		NCURSES_LOCK.store(false, Ordering::SeqCst); // end of NCurses' critical section
+		if r.is_err() {
+			NCURSES_FLAG.store(false, Ordering::SeqCst);
+			return Err("NCurses could not be initialized correctly.");
+		}
 
 
 
@@ -253,9 +260,7 @@ impl Term {
 
 impl Drop for Term {
 	fn drop(&mut self) {
-		endwin();
-		// release the init_flag lock
-		NCURSES_FLAG.store(false, Ordering::Release);
+		free_ncurses();
 	}
 }
 
@@ -279,8 +284,7 @@ fn empty_stdin(_ncurses_guard: &mut Term) {
 		}
 	}
 	// If this part is reached, it means we should crash because the buffer was too full.
-	// it is a conservative security feature. The user input is not trusted here.
-	endwin();
+	// it is a conservative security feature. The user input is not trusted.
 	panic!("There are too many characters in the stdin buffer yo. Aborting. Wtf were u doing.");
 }
 
@@ -347,6 +351,20 @@ fn empty_stdin(_ncurses_guard: &mut Term) {
 // 	wrefresh(w);
 // 	Ok(w)
 // }
+
+/// Uninitialize NCurses. Thread-safe.
+/// Call before the standard panic to ensure NCurses is freed. Otherwise the panic message may land
+/// on NCurses' screen.
+pub fn free_ncurses() {
+	// spin-lock
+	while NCURSES_LOCK.swap(true, Ordering::SeqCst) {}
+	if NCURSES_FLAG.swap(false, Ordering::SeqCst) {
+		endwin(); // The flag was "true" so NCurses is active and needs to be uninitialized.
+		// NCURSES_FLAG is now false, whatever state it was in before.
+	}
+	// release the spin-lock
+	NCURSES_LOCK.store(false, Ordering::SeqCst);
+}
 
 fn init_ncurses() -> Result<(), ()> {
 	let r = initscr(); // Initializes stuff and put the terminal in that screen mode.
